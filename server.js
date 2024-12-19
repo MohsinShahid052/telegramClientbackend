@@ -502,37 +502,7 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const crypto = require("crypto");
 const input = require("input"); 
-const mongoose = require("mongoose"); // Import Mongoose for MongoDB
 
-
-
-mongoose.connect("mongodb+srv://telegram:telegram1234@cluster0.dtoi1.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0", {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 45000,
-  family: 4
-}).then(() => {
-  console.log("Successfully connected to MongoDB.");
-}).catch((error) => {
-  console.log("MongoDB connection error:", error);
-  // Implement retry logic if needed
-});
-const db = mongoose.connection;
-db.on("error", console.error.bind(console, "MongoDB connection error:"));
-db.once("open", () => {
-  console.log("Connected to MongoDB");
-});
-const UserSchema = new mongoose.Schema({
-  phoneNumber: { type: String, required: true, unique: true },
-  sessionToken: { type: String, required: true },
-  sessionData: { type: String, required: true },
-  firstName: String,
-  lastName: String,
-  createdAt: { type: Date, default: Date.now },
-});
-
-const User = mongoose.model("User", UserSchema);
 
 
 const app = express();
@@ -549,51 +519,17 @@ class TelegramAuthService {
     this.session = new StringSession("");
   }
 
-  // async initializeClient(phoneNumber) {
-  //   try {
-  //     if (!phoneNumber || typeof phoneNumber !== 'string') {
-  //       throw new Error('Invalid phone number format');
-  //     }
-
-  //     const formattedPhoneNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
-
-  //     this.client = new TelegramClient(this.session, apiId, apiHash, {
-  //       connectionRetries: 5,
-  //       useWSS: false
-  //     });
-
-  //     await this.client.connect();
-
-  //     const sendCodeResult = await this.client.invoke(
-  //       new Api.auth.SendCode({
-  //         phoneNumber: formattedPhoneNumber,
-  //         apiId: apiId,
-  //         apiHash: apiHash,
-  //         settings: new Api.CodeSettings({})
-  //       })
-  //     );
-
-  //     this.phoneCodeHash = sendCodeResult.phoneCodeHash;
-  //     return { status: 'success', phoneCodeHash: this.phoneCodeHash };
-  //   } catch (error) {
-  //     console.error("Client Initialization Error:", error);
-  //     throw error;
-  //   }
-  // }
-
   async initializeClient(phoneNumber) {
     try {
-      if (!phoneNumber || typeof phoneNumber !== "string") {
-        throw new Error("Invalid phone number format");
+      if (!phoneNumber || typeof phoneNumber !== 'string') {
+        throw new Error('Invalid phone number format');
       }
 
-      const formattedPhoneNumber = phoneNumber.startsWith("+")
-        ? phoneNumber
-        : `+${phoneNumber}`;
+      const formattedPhoneNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
 
       this.client = new TelegramClient(this.session, apiId, apiHash, {
         connectionRetries: 5,
-        useWSS: false,
+        useWSS: false
       });
 
       await this.client.connect();
@@ -603,17 +539,19 @@ class TelegramAuthService {
           phoneNumber: formattedPhoneNumber,
           apiId: apiId,
           apiHash: apiHash,
-          settings: new Api.CodeSettings({}),
+          settings: new Api.CodeSettings({})
         })
       );
 
       this.phoneCodeHash = sendCodeResult.phoneCodeHash;
-      return { status: "success", phoneCodeHash: this.phoneCodeHash };
+      return { status: 'success', phoneCodeHash: this.phoneCodeHash };
     } catch (error) {
       console.error("Client Initialization Error:", error);
       throw error;
     }
   }
+
+
 
   async generateQR() {
     try {
@@ -682,62 +620,16 @@ class TelegramAuthService {
   }
 
 
-  // async validateOTP(phoneNumber, otp, phoneCodeHash) {
-  //   try {
-  //     if (!phoneNumber || !otp || !phoneCodeHash) {
-  //       throw new Error('Missing required authentication parameters');
-  //     }
-
-  //     const formattedPhoneNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
-
-  //     const validationClient = new TelegramClient(this.session, apiId, apiHash, {
-  //       connectionRetries: 5
-  //     });
-
-  //     await validationClient.connect();
-
-  //     const signInResult = await validationClient.invoke(
-  //       new Api.auth.SignIn({
-  //         phoneNumber: formattedPhoneNumber,
-  //         phoneCodeHash: phoneCodeHash,
-  //         phoneCode: otp
-  //       })
-  //     );
-
-  //     const sessionToken = crypto.randomBytes(32).toString('hex');
-      
-  //     sessionStore.set(sessionToken, {
-  //       session: validationClient.session.save(),
-  //       client: validationClient
-  //     });
-
-  //     return {
-  //       status: 'success',
-  //       sessionToken: sessionToken,
-  //       user: signInResult.user ? {
-  //         id: signInResult.user.id,
-  //         firstName: signInResult.user.firstName,
-  //         lastName: signInResult.user.lastName
-  //       } : null
-  //     };
-  //   } catch (error) {
-  //     console.error("OTP Validation Error:", error);
-  //     throw error;
-  //   }
-  // }
-
   async validateOTP(phoneNumber, otp, phoneCodeHash) {
     try {
       if (!phoneNumber || !otp || !phoneCodeHash) {
-        throw new Error("Missing required authentication parameters");
+        throw new Error('Missing required authentication parameters');
       }
 
-      const formattedPhoneNumber = phoneNumber.startsWith("+")
-        ? phoneNumber
-        : `+${phoneNumber}`;
+      const formattedPhoneNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
 
       const validationClient = new TelegramClient(this.session, apiId, apiHash, {
-        connectionRetries: 5,
+        connectionRetries: 5
       });
 
       await validationClient.connect();
@@ -746,33 +638,25 @@ class TelegramAuthService {
         new Api.auth.SignIn({
           phoneNumber: formattedPhoneNumber,
           phoneCodeHash: phoneCodeHash,
-          phoneCode: otp,
+          phoneCode: otp
         })
       );
 
-      const sessionToken = crypto.randomBytes(32).toString("hex");
-
-      // Save user data to MongoDB
-      const user = new User({
-        phoneNumber: formattedPhoneNumber,
-        sessionToken: sessionToken,
-        sessionData: validationClient.session.save(),
-        firstName: signInResult.user?.firstName || null,
-        lastName: signInResult.user?.lastName || null,
+      const sessionToken = crypto.randomBytes(32).toString('hex');
+      
+      sessionStore.set(sessionToken, {
+        session: validationClient.session.save(),
+        client: validationClient
       });
 
-      await user.save();
-
       return {
-        status: "success",
+        status: 'success',
         sessionToken: sessionToken,
-        user: signInResult.user
-          ? {
-              id: signInResult.user.id,
-              firstName: signInResult.user.firstName,
-              lastName: signInResult.user.lastName,
-            }
-          : null,
+        user: signInResult.user ? {
+          id: signInResult.user.id,
+          firstName: signInResult.user.firstName,
+          lastName: signInResult.user.lastName
+        } : null
       };
     } catch (error) {
       console.error("OTP Validation Error:", error);
@@ -782,51 +666,24 @@ class TelegramAuthService {
 
 
 
-  // async getAuthenticatedClient(sessionToken) {
-  //   try {
-  //     console.log("Getting authenticated client for session:", sessionToken);
-  //     const sessionData = sessionStore.get(sessionToken);
-      
-  //     if (!sessionData) {
-  //       console.log("No session data found for token:", sessionToken);
-  //       throw new Error('Invalid session');
-  //     }
-
-  //     const client = new TelegramClient(
-  //       new StringSession(sessionData.session),
-  //       apiId,
-  //       apiHash,
-  //       {
-  //         connectionRetries: 5,
-  //         useWSS: false
-  //       }
-  //     );
-
-  //     await client.connect();
-  //     return client;
-  //   } catch (error) {
-  //     console.error("Error getting authenticated client:", error);
-  //     throw error;
-  //   }
-  // }
 
   async getAuthenticatedClient(sessionToken) {
     try {
       console.log("Getting authenticated client for session:", sessionToken);
-      const user = await User.findOne({ sessionToken });
-
-      if (!user) {
-        console.log("No user found for token:", sessionToken);
-        throw new Error("Invalid session");
+      const sessionData = sessionStore.get(sessionToken);
+      
+      if (!sessionData) {
+        console.log("No session data found for token:", sessionToken);
+        throw new Error('Invalid session');
       }
 
       const client = new TelegramClient(
-        new StringSession(user.sessionData),
+        new StringSession(sessionData.session),
         apiId,
         apiHash,
         {
           connectionRetries: 5,
-          useWSS: false,
+          useWSS: false
         }
       );
 
@@ -838,26 +695,8 @@ class TelegramAuthService {
     }
   }
 
-
-  // async checkSession(sessionToken) {
-  //   try {
-  //     console.log("Checking session for token:", sessionToken);
-  //     if (!sessionToken) {
-  //       console.log("No session token provided");
-  //       return { isActive: false };
-  //     }
-
-  //     const client = await this.getAuthenticatedClient(sessionToken);
-  //     const isAuthorized = await client.isUserAuthorized();
-  //     console.log("Session authorization status:", isAuthorized);
-      
-  //     return { isActive: isAuthorized };
-  //   } catch (error) {
-  //     console.error("Session check error:", error);
-  //     return { isActive: false };
-  //   }
-  // }
   
+
   async checkSession(sessionToken) {
     try {
       console.log("Checking session for token:", sessionToken);
@@ -869,14 +708,15 @@ class TelegramAuthService {
       const client = await this.getAuthenticatedClient(sessionToken);
       const isAuthorized = await client.isUserAuthorized();
       console.log("Session authorization status:", isAuthorized);
-
+      
       return { isActive: isAuthorized };
     } catch (error) {
       console.error("Session check error:", error);
       return { isActive: false };
     }
   }
-
+  
+  
 
 }
 
@@ -940,43 +780,39 @@ app.get('/debug/sessions', (req, res) => {
   });
 });
 
-
-
-app.post("/send-otp", async (req, res) => {
+// Send OTP endpoint
+app.post('/send-otp', async (req, res) => {
   try {
     const { phoneNumber } = req.body;
     const result = await telegramAuthService.initializeClient(phoneNumber);
     res.json({
-      status: "success",
-      message: "OTP sent successfully",
-      phoneCodeHash: result.phoneCodeHash,
+      status: 'success',
+      message: 'OTP sent successfully',
+      phoneCodeHash: result.phoneCodeHash
     });
   } catch (error) {
     res.status(500).json({
-      status: "error",
-      message: error.message || "Failed to send OTP",
+      status: 'error',
+      message: error.message || 'Failed to send OTP'
     });
   }
 });
 
-app.post("/validate-otp", async (req, res) => {
+// Validate OTP endpoint
+app.post('/validate-otp', async (req, res) => {
   try {
     const { phoneNumber, otp, phoneCodeHash } = req.body;
-    const result = await telegramAuthService.validateOTP(
-      phoneNumber,
-      otp,
-      phoneCodeHash
-    );
+    const result = await telegramAuthService.validateOTP(phoneNumber, otp, phoneCodeHash);
     res.json({
-      status: "success",
-      message: "OTP validated successfully",
+      status: 'success',
+      message: 'OTP validated successfully',
       sessionToken: result.sessionToken,
-      user: result.user,
+      user: result.user
     });
   } catch (error) {
     res.status(400).json({
-      status: "error",
-      message: error.message || "Invalid OTP",
+      status: 'error',
+      message: error.message || 'Invalid OTP'
     });
   }
 });
