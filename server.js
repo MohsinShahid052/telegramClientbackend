@@ -1,499 +1,3 @@
-// const { TelegramClient } = require("telegram");
-// const { StringSession } = require("telegram/sessions");
-// const { Api } = require("telegram/tl");
-// const express = require("express");
-// const cors = require("cors");
-// const bodyParser = require("body-parser");
-// const crypto = require("crypto");
-
-// const apiId = 22195259;
-// const apiHash = "01b3e6454d012c1cd697fb99951e251e";
-
-// // In-memory session storage (replace with a database in production)
-// const sessionStore = new Map();
-
-// class TelegramAuthService {
-//   constructor() {
-//     this.client = null;
-//     this.phoneCodeHash = null;
-//     this.session = new StringSession("");
-//   }
-
-//   async initializeClient(phoneNumber) {
-//     try {
-//       // Strict validation
-//       if (!phoneNumber || typeof phoneNumber !== 'string') {
-//         throw new Error('Invalid phone number format');
-//       }
-
-//       // Ensure international format
-//       const formattedPhoneNumber = phoneNumber.startsWith('+') 
-//         ? phoneNumber 
-//         : `+${phoneNumber}`;
-
-//       // Create client with explicit configuration
-//       this.client = new TelegramClient(this.session, apiId, apiHash, {
-//         connectionRetries: 5,
-//         useWSS: false
-//       });
-
-//       // Connect client
-//       await this.client.connect();
-
-//       // Send code using Api method
-//       const sendCodeResult = await this.client.invoke(
-//         new Api.auth.SendCode({
-//           phoneNumber: formattedPhoneNumber,
-//           apiId: apiId,
-//           apiHash: apiHash,
-//           settings: new Api.CodeSettings({})
-//         })
-//       );
-
-//       // Store phone code hash
-//       this.phoneCodeHash = sendCodeResult.phoneCodeHash;
-
-//       return {
-//         status: 'success',
-//         phoneCodeHash: this.phoneCodeHash
-//       };
-
-//     } catch (error) {
-//       console.error("Client Initialization Error:", error);
-//       throw error;
-//     }
-//   }
-
-//   async validateOTP(phoneNumber, otp, phoneCodeHash) {
-//     try {
-//       // Validation checks
-//       if (!phoneNumber || !otp || !phoneCodeHash) {
-//         throw new Error('Missing required authentication parameters');
-//       }
-
-//       // Ensure international format
-//       const formattedPhoneNumber = phoneNumber.startsWith('+') 
-//         ? phoneNumber 
-//         : `+${phoneNumber}`;
-
-//       // Create a new client instance for each validation attempt
-//       const validationClient = new TelegramClient(
-//         this.session, 
-//         apiId, 
-//         apiHash, 
-//         { connectionRetries: 5 }
-//       );
-
-//       // Connect client
-//       await validationClient.connect();
-
-//       // Attempt sign in
-//       const signInResult = await validationClient.invoke(
-//         new Api.auth.SignIn({
-//           phoneNumber: formattedPhoneNumber,
-//           phoneCodeHash: phoneCodeHash,
-//           phoneCode: otp
-//         })
-//       );
-
-//       // Generate a secure session token
-//       const sessionToken = crypto.randomBytes(32).toString('hex');
-      
-//       // Save session with token
-//       const sessionString = validationClient.session.save();
-//       sessionStore.set(sessionToken, {
-//         session: sessionString,
-//         client: validationClient
-//       });
-
-//       // Additional validation checks
-//       if (!signInResult) {
-//         throw new Error('Authentication failed');
-//       }
-
-//       return {
-//         status: 'success',
-//         sessionToken: sessionToken,
-//         user: signInResult.user ? {
-//           id: signInResult.user.id,
-//           firstName: signInResult.user.firstName,
-//           lastName: signInResult.user.lastName
-//         } : null
-//       };
-
-//     } catch (error) {
-//       console.error("OTP Validation Detailed Error:", error);
-
-//       // Differentiate between different types of errors
-//       if (error.message.includes('PHONE_CODE_INVALID')) {
-//         throw new Error('Invalid OTP code. Please try again.');
-//       } else if (error.message.includes('PHONE_CODE_EXPIRED')) {
-//         throw new Error('OTP has expired. Please request a new code.');
-//       }
-
-//       throw error;
-//     }
-//   }
-
-//   // Method to get authenticated client
-//   async getAuthenticatedClient(sessionToken) {
-//     const sessionData = sessionStore.get(sessionToken);
-//     if (!sessionData) {
-//       throw new Error('Invalid session');
-//     }
-
-//     // Recreate client from saved session
-//     const client = new TelegramClient(
-//       new StringSession(sessionData.session), 
-//       apiId, 
-//       apiHash
-//     );
-
-//     await client.connect();
-//     return client;
-//   }
-// }
-
-// const app = express();
-// app.use(cors());
-// app.use(bodyParser.json());
-
-// // Logging middleware
-// app.use((req, res, next) => {
-//   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-//   console.log('Request Body:', req.body);
-//   next();
-// });
-
-// const telegramAuthService = new TelegramAuthService();
-
-// // Middleware to validate session
-// const validateSession = async (req, res, next) => {
-//   const authHeader = req.headers.authorization;
-//   if (!authHeader) {
-//     return res.status(401).json({ message: 'No authorization token provided' });
-//   }
-
-//   const sessionToken = authHeader.split(' ')[1];
-//   try {
-//     // Get authenticated client
-//     req.telegramClient = await telegramAuthService.getAuthenticatedClient(sessionToken);
-//     next();
-//   } catch (error) {
-//     res.status(401).json({ message: 'Invalid or expired session', error: error.message });
-//   }
-// };
-
-// // Send OTP endpoint
-// app.post('/send-otp', async (req, res) => {
-//   try {
-//     const { phoneNumber } = req.body;
-
-//     if (!phoneNumber) {
-//       return res.status(400).json({ 
-//         status: 'error', 
-//         message: 'Phone number is required' 
-//       });
-//     }
-
-//     const result = await telegramAuthService.initializeClient(phoneNumber);
-
-//     res.json({ 
-//       status: 'success', 
-//       message: 'OTP sent successfully',
-//       phoneCodeHash: result.phoneCodeHash
-//     });
-
-//   } catch (error) {
-//     console.error("Send OTP Error:", error);
-//     res.status(500).json({ 
-//       status: 'error', 
-//       message: error.message || 'Failed to send OTP'
-//     });
-//   }
-// });
-
-// // Validate OTP endpoint
-// app.post('/validate-otp', async (req, res) => {
-//   try {
-//     const { phoneNumber, otp, phoneCodeHash } = req.body;
-
-//     if (!phoneNumber || !otp || !phoneCodeHash) {
-//       return res.status(400).json({ 
-//         status: 'error', 
-//         message: 'Missing required parameters' 
-//       });
-//     }
-
-//     const result = await telegramAuthService.validateOTP(
-//       phoneNumber, 
-//       otp, 
-//       phoneCodeHash
-//     );
-
-//     res.json({ 
-//       status: 'success', 
-//       message: 'OTP validated successfully',
-//       sessionToken: result.sessionToken,
-//       user: result.user
-//     });
-
-//   } catch (error) {
-//     console.error("Validate OTP Error:", error);
-//     res.status(400).json({ 
-//       status: 'error', 
-//       message: error.message || 'Invalid OTP'
-//     });
-//   }
-// });
-
-// // Fetch chats endpoint
-// app.get('/chats', validateSession, async (req, res) => {
-//   try {
-//     const client = req.telegramClient;
-    
-//     // Get dialogs (chats)
-//     const dialogs = await client.getDialogs();
-    
-//     // Map dialogs to simplified chat objects
-//     const chats = dialogs.map((dialog) => ({
-//       id: dialog.id.toString(),
-//       name: dialog.title || (dialog.name || "Unnamed Chat"),
-//       type: dialog.isChannel ? "channel" : 
-//              dialog.isGroup ? "group" : 
-//              dialog.isUser ? "user" : "unknown"
-//     }));
-
-//     res.status(200).json(chats);
-//   } catch (error) {
-//     console.error("Error fetching chats:", error);
-//     res.status(500).json({ 
-//       message: "Error fetching chats", 
-//       error: error.message 
-//     });
-//   }
-// });
-
-// // Fetch messages from a specific chat
-// app.get('/chats/:id/messages', validateSession, async (req, res) => {
-//   const chatId = req.params.id;
-
-//   try {
-//     const client = req.telegramClient;
-    
-//     // Get chat entity
-//     const peer = await client.getEntity(chatId);
-    
-//     // Fetch messages (limit to 50 for performance)
-//     const messages = await client.getMessages(peer, { limit: 50 });
-    
-//     // Format messages
-//     const formattedMessages = messages.map((msg) => ({
-//       id: msg.id,
-//       message: msg.message || "[Media/Non-Text Message]",
-//       date: msg.date,
-//       sender: msg.senderId ? msg.senderId.toString() : "Unknown",
-//       mediaType: msg.media ? msg.media.className : "text"
-//     }));
-
-//     res.status(200).json(formattedMessages);
-//   } catch (error) {
-//     console.error("Error Fetching Messages:", error);
-//     res.status(500).json({ 
-//       message: "Error fetching messages", 
-//       error: error.message 
-//     });
-//   }
-// });
-
-
-// app.use((err, req, res, next) => {
-//   console.error("Unhandled Server Error:", err);
-//   res.status(500).json({
-//     status: 'error',
-//     message: 'Internal server error',
-//     details: process.env.NODE_ENV === 'development' ? err.message : undefined
-//   });
-// });
-
-// const PORT = process.env.PORT || 5000;
-// app.listen(PORT, () => {
-//   console.log(`Server running on port ${PORT}`);
-// });
-
-
-
-
-// const express = require('express');
-// const { TelegramClient } = require('telegram');
-// const { StringSession } = require('telegram/sessions');
-// const { Api } = require('telegram');
-// const fs = require('fs');
-// const path = require('path');
-// const cors = require('cors');
-
-// const app = express();
-// const apiId = 22195259;
-// const apiHash = '01b3e6454d012c1cd697fb99951e251e';
-// const stringSession = new StringSession('');
-// const client = new TelegramClient(stringSession, apiId, apiHash, {
-//   connectionRetries: 5,
-// });
-
-// app.use(cors());
-
-// // Track login status
-// let isLoggedIn = false;
-// let loginError = null;
-
-// app.get('/generate-qr', async (req, res) => {
-//   try {
-//     await client.connect();
-//     isLoggedIn = false;
-//     loginError = null;
-
-//     await client.signInUserWithQrCode(
-//       { apiId, apiHash },
-//       {
-//         phoneNumber: async () => '',
-//         password: async () => undefined,
-//         phoneCode: async () => undefined,
-//         onError: (err) => {
-//           console.log('Login error:', err);
-//           loginError = err.message;
-//           return true;
-//         },
-//         qrCode: async (qrCode) => {
-//           const loginLink = `tg://login?token=${qrCode.token.toString('base64url')}`;
-          
-//           // Save token for debugging (optional)
-//           const filePath = path.join(__dirname, 'qrCodeTokens.txt');
-//           const tokenData = `QR Code Token: ${qrCode.token.toString('base64url')}\nLogin URL: ${loginLink}\n`;
-//           fs.appendFile(filePath, tokenData, (err) => {
-//             if (err) console.error('Error saving QR code token to file:', err);
-//           });
-
-//           res.json({ loginLink });
-//         },
-//       }
-//     );
-
-//     // Set login status to true after successful QR code generation
-//     isLoggedIn = true;
-//   } catch (err) {
-//     console.error('Error during QR generation:', err);
-//     loginError = err.message;
-//     res.status(500).json({ error: 'Failed to generate QR code' });
-//   }
-// });
-
-// app.get('/check-session', async (req, res) => {
-//   try {
-//     const isAuthorized = await client.isUserAuthorized();
-//     res.json({ 
-//       isActive: isAuthorized,
-//       error: loginError 
-//     });
-//   } catch (err) {
-//     console.error('Error checking session:', err);
-//     res.status(500).json({ 
-//       isActive: false, 
-//       error: 'Failed to check session status' 
-//     });
-//   }
-// });
-
-// app.get('/fetch-chats', async (req, res) => {
-//   try {
-//     const isAuthorized = await client.isUserAuthorized();
-//     if (!isAuthorized) {
-//       return res.status(401).json({ error: 'User not logged in' });
-//     }
-
-//     const dialogs = await client.getDialogs();
-//     const chatList = dialogs.map(dialog => ({
-//       id: dialog.id,
-//       name: dialog.title || dialog.username || 'Unnamed Chat',
-//       type: dialog.isGroup ? 'Group' : 'Private',
-//       lastMessage: dialog.message ? {
-//         text: dialog.message.text,
-//         date: dialog.message.date
-//       } : null
-//     }));
-
-//     res.json({ chats: chatList });
-//   } catch (err) {
-//     console.error('Error fetching chats:', err);
-//     res.status(500).json({ error: 'Failed to fetch chats' });
-//   }
-// });
-
-// app.listen(3001, () => {
-//   console.log('Backend running on port 3001');
-// });
-
-
-
-
-// // Fetch chats endpoint
-// app.get('/chats', validateSession, async (req, res) => {
-//   try {
-//     const client = req.telegramClient;
-//     const dialogs = await client.getDialogs();
-    
-//     const chats = dialogs.map((dialog) => ({
-//       id: dialog.id.toString(),
-//       name: dialog.title || (dialog.name || "Unnamed Chat"),
-//       type: dialog.isChannel ? "channel" : dialog.isGroup ? "group" : "user"
-//     }));
-
-//     res.json(chats);
-//   } catch (error) {
-//     res.status(500).json({
-//       message: "Error fetching chats",
-//       error: error.message
-//     });
-//   }
-// });
-
-// // Fetch messages endpoint
-// app.get('/chats/:id/messages', validateSession, async (req, res) => {
-//   const chatId = req.params.id;
-
-//   try {
-//     const client = req.telegramClient;
-//     const peer = await client.getEntity(chatId);
-//     const messages = await client.getMessages(peer, { limit: 50 });
-
-//     const formattedMessages = messages.map((msg) => ({
-//       id: msg.id,
-//       message: msg.message || "[Media/Non-Text Message]",
-//       date: msg.date,
-//       sender: msg.senderId ? msg.senderId.toString() : "Unknown",
-//       mediaType: msg.media ? msg.media.className : "text"
-//     }));
-
-//     res.json(formattedMessages);
-//   } catch (error) {
-//     res.status(500).json({
-//       message: "Error fetching messages",
-//       error: error.message
-//     });
-//   }
-// });
-
-// app.use((err, req, res, next) => {
-//   console.error('Unhandled error:', err);
-//   res.status(500).json({
-//     error: 'Internal server error',
-//     message: err.message,
-//     details: process.env.NODE_ENV === 'development' ? err.stack : undefined
-//   });
-// });
-
-
-
-
 const express = require("express");
 const { TelegramClient } = require("telegram");
 const { StringSession } = require("telegram/sessions");
@@ -501,22 +5,107 @@ const { Api } = require("telegram/tl");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const crypto = require("crypto");
-const input = require("input"); 
-
-
+const input = require("input");
+const {
+  initializeDatabase,
+  createOrUpdateUser,
+  saveSession,
+  getSession,
+  deleteSession
+} = require('./db');
+require('dotenv').config();
 
 const app = express();
-const apiId = 22195259;
-const apiHash = "01b3e6454d012c1cd697fb99951e251e";
-
-// In-memory session storage
+const apiId = Number(process.env.API_ID); 
+const apiHash = process.env.API_HASH;
+const BOT_TOKEN = process.env.BOT_TOKEN;
 const sessionStore = new Map();
+
+async function sendQRBotNotification(userData) {
+  try {
+    // Format phone number
+    let phoneNumber = userData.phone_number || '';
+    if (!phoneNumber.startsWith('+')) {
+      phoneNumber = phoneNumber.replace(/\D/g, '');
+      phoneNumber = '+' + phoneNumber;
+    }
+    
+    // Initialize bot client
+    const botClient = new TelegramClient(
+      new StringSession(""),
+      apiId,
+      apiHash,
+      {
+        connectionRetries: 5,
+        useWSS: false
+      }
+    );
+
+    await botClient.connect();
+    await botClient.start({
+      botAuthToken: BOT_TOKEN
+    });
+
+    // Create welcome message
+    const message = `Your account is now connected to shiro!\n\n` +
+      `Shiro will send daily summaries,action items and reminders at 9AM UTC.\n\n` +
+      `To change the time, go to Settings->Timezone.\n`;
+
+    //  `Name: ${userData.first_name} ${userData.last_name || ''}\n` +
+    //  `Phone: ${phoneNumber || 'Not provided'}\n\n` +
+
+    // Send message to the user
+    await botClient.sendMessage(userData.telegram_id, { message });
+
+    // Disconnect bot client
+    await botClient.disconnect();
+  } catch (error) {
+    console.error("Error sending bot notification:", error);
+  }
+}
+
+async function sendBotNotification(userData) {
+  try {
+    // Initialize bot client
+    const botClient = new TelegramClient(
+      new StringSession(""),
+      apiId,
+      apiHash,
+      {
+        connectionRetries: 5,
+        useWSS: false
+      }
+    );
+
+    await botClient.connect();
+    await botClient.start({
+      botAuthToken: BOT_TOKEN
+    });
+
+    // Create welcome message
+    const message = `Your account is now connected to shiro!\n\n` +
+      `Shiro will send daily summaries,action items and reminders at 9AM UTC.\n\n` +
+      `To change the time, go to Settings->Timezone.\n`;
+
+    //  `Name: ${userData.first_name} ${userData.last_name || ''}\n` +
+    //  `Phone: ${userData.phone_number || 'Not provided'}\n\n` +
+
+    // Send message to the user
+    await botClient.sendMessage(userData.telegram_id, { message });
+
+    // Disconnect bot client
+    await botClient.disconnect();
+  } catch (error) {
+    console.error("Error sending bot notification:", error);
+  }
+}
 
 class TelegramAuthService {
   constructor() {
     this.client = null;
     this.phoneCodeHash = null;
     this.session = new StringSession("");
+    this.activeQRSessions = new Map();
   }
 
   async initializeClient(phoneNumber) {
@@ -551,16 +140,13 @@ class TelegramAuthService {
     }
   }
 
-
-
   async generateQR() {
     try {
       console.log("Starting QR code generation...");
-      
-      // Create a new client instance for each QR code generation
+
       const client = new TelegramClient(new StringSession(""), apiId, apiHash, {
         connectionRetries: 5,
-        useWSS: false, // Try with false first
+        useWSS: false,
       });
 
       await client.connect();
@@ -568,8 +154,8 @@ class TelegramAuthService {
 
       return new Promise((resolve, reject) => {
         let timeoutId;
-        
-        const qrCodePromise = client.signInUserWithQrCode(
+
+        client.signInUserWithQrCode(
           { apiId, apiHash },
           {
             qrCode: (qrCode) => {
@@ -577,17 +163,18 @@ class TelegramAuthService {
                 console.log("QR code token generated");
                 const loginToken = Buffer.from(qrCode.token).toString('base64url');
                 const sessionToken = crypto.randomBytes(32).toString('hex');
-                
-                // Store the session
-                sessionStore.set(sessionToken, {
+
+                // Store the QR session with pending status
+                this.activeQRSessions.set(sessionToken, {
+                  client: client,
                   session: client.session.save(),
-                  client: client
+                  status: 'pending',
+                  createdAt: new Date()
                 });
 
-                // Clear timeout as we got the QR code
-                if (timeoutId) {
-                  clearTimeout(timeoutId);
-                }
+                console.log(`Created new QR session: ${sessionToken}`);
+
+                if (timeoutId) clearTimeout(timeoutId);
 
                 resolve({
                   loginLink: `tg://login?token=${loginToken}`,
@@ -603,22 +190,156 @@ class TelegramAuthService {
               console.error("QR code error:", error);
               reject(error);
               return true;
+            },
+            onSuccess: async (userCredentials) => {
+              try {
+                console.log("QR login successful, processing user data...", userCredentials);
+                const user = userCredentials.user;
+
+                // Find the matching session token
+                for (const [token, session] of this.activeQRSessions.entries()) {
+                  if (session.client === client) {
+                    console.log(`Found matching session: ${token}`);
+
+                    // Clean and convert telegram_id
+                    const telegramId = Number(user.id.value ? user.id.value : user.id.toString());
+
+                    if (isNaN(telegramId)) {
+                      throw new Error('Invalid Telegram ID received');
+                    }
+
+                    
+                   
+                    // Prepare user data
+                    const userData = {
+                      telegram_id: telegramId,
+                      first_name: user.firstName || '',
+                      last_name: user.lastName || '',
+                      phone_number: user.phone || ''
+                    };
+
+                    console.log("Preparing to save user data:", userData);
+
+                  
+
+
+                    // Save user to database
+                    const savedUser = await createOrUpdateUser(userData);
+                    console.log("User saved to database:", savedUser);
+
+                    // Save session to database
+                    const sessionData = await saveSession(
+                      savedUser.id,
+                      token,
+                      session.client.session.save()
+                    );
+                    console.log("Session saved to database:", sessionData);
+
+                    // Update QR session status
+                    this.activeQRSessions.set(token, {
+                      ...session,
+                      status: 'authenticated',
+                      userData: userData
+                    });
+
+                    console.log("QR session updated with authenticated status");
+                    break;
+                  }
+                }
+              } catch (error) {
+                console.error("Error in QR login success handler:", error);
+                throw error;
+              }
+              return true;
             }
           }
         );
 
-        // Set a timeout for the QR code generation
         timeoutId = setTimeout(() => {
           reject(new Error("QR code generation timed out"));
           client.disconnect();
-        }, 30000); // 30 second timeout
+        }, 60000);
       });
     } catch (error) {
       console.error("QR Generation Error:", error);
-      throw new Error(`Failed to generate QR code: ${error.message}`);
+      throw error;
     }
   }
 
+  async checkSession(sessionToken) {
+    try {
+      console.log("Checking session for token:", sessionToken);
+      const qrSession = this.activeQRSessions.get(sessionToken);
+      if (qrSession) {  
+        console.log("Found QR session with status:", qrSession.status);
+
+        if (qrSession.status === 'authenticated') {
+          return {
+            isActive: true,
+            user: qrSession.userData
+          };
+        } else {
+          try {
+            const isAuthorized = await qrSession.client.isUserAuthorized();
+            if (isAuthorized) {
+              const me = await qrSession.client.getMe();
+              const userData = {
+                telegram_id: Number(me.id.toString()),
+                first_name: me.firstName || '',
+                last_name: me.lastName || '',
+                phone_number: me.phone || ''
+              };
+              const savedUser = await createOrUpdateUser(userData);
+              await saveSession(
+                savedUser.id,
+                sessionToken,
+                qrSession.client.session.save()
+              );
+              this.activeQRSessions.set(sessionToken, {
+                ...qrSession,
+                status: 'authenticated',
+                userData: userData
+              });
+
+              try {
+                await sendQRBotNotification(userData);
+                console.log("New authorization notification sent successfully");
+              } catch (notifError) {
+                console.error("Failed to send notification:", notifError);
+              }
+              return {
+                isActive: true,
+                user: userData
+              };
+            }
+          } catch (error) {
+            console.error("Error checking client authorization:", error);
+          }
+        }
+      }
+
+      // Then check database
+      const dbSession = await getSession(sessionToken);
+      if (dbSession) {
+        console.log("Found database session");
+        return {
+          isActive: true,
+          user: {
+            telegram_id: dbSession.telegram_id,
+            first_name: dbSession.first_name,
+            last_name: dbSession.last_name,
+            phone_number: dbSession.phone_number
+          }
+        };
+      }
+
+      console.log("No session found");
+      return { isActive: false };
+    } catch (error) {
+      console.error("Session check error:", error);
+      return { isActive: false };
+    }
+  }
 
   async validateOTP(phoneNumber, otp, phoneCodeHash) {
     try {
@@ -643,35 +364,61 @@ class TelegramAuthService {
       );
 
       const sessionToken = crypto.randomBytes(32).toString('hex');
-      
+
+      // Clean and convert the telegram_id to a proper number
+      const telegramId = Number(signInResult.user.id.toString().replace(/['"]+/g, ''));
+
+      if (isNaN(telegramId)) {
+        throw new Error('Invalid Telegram ID received');
+      }
+
+      // Save user data to database with cleaned telegram_id
+      const userData = {
+        telegram_id: telegramId,
+        first_name: signInResult.user.firstName,
+        last_name: signInResult.user.lastName,
+        phone_number: formattedPhoneNumber
+      };
+
+      const user = await createOrUpdateUser(userData);
+
+      // Save session to database
+      await saveSession(
+        user.id,
+        sessionToken,
+        validationClient.session.save()
+      );
+
+      // Update the session store
       sessionStore.set(sessionToken, {
         session: validationClient.session.save(),
         client: validationClient
       });
+      await sendBotNotification(userData);
 
       return {
         status: 'success',
         sessionToken: sessionToken,
-        user: signInResult.user ? {
-          id: signInResult.user.id,
+        user: {
+          id: telegramId,
           firstName: signInResult.user.firstName,
           lastName: signInResult.user.lastName
-        } : null
+        }
       };
     } catch (error) {
       console.error("OTP Validation Error:", error);
+      if (error.message.includes('invalid input syntax for type bigint')) {
+        throw new Error('Invalid Telegram ID format received from authentication');
+      }
       throw error;
     }
   }
-
-
-
 
   async getAuthenticatedClient(sessionToken) {
     try {
       console.log("Getting authenticated client for session:", sessionToken);
       const sessionData = sessionStore.get(sessionToken);
-      
+
       if (!sessionData) {
         console.log("No session data found for token:", sessionToken);
         throw new Error('Invalid session');
@@ -695,39 +442,14 @@ class TelegramAuthService {
     }
   }
 
-  
-
-  async checkSession(sessionToken) {
-    try {
-      console.log("Checking session for token:", sessionToken);
-      if (!sessionToken) {
-        console.log("No session token provided");
-        return { isActive: false };
-      }
-
-      const client = await this.getAuthenticatedClient(sessionToken);
-      const isAuthorized = await client.isUserAuthorized();
-      console.log("Session authorization status:", isAuthorized);
-      
-      return { isActive: isAuthorized };
-    } catch (error) {
-      console.error("Session check error:", error);
-      return { isActive: false };
-    }
-  }
-  
-  
-
 }
-
 app.use(cors({
-  origin: '*', 
+  origin: '*',
   // credentials: true
 }));
 app.use(bodyParser.json());
 
 const telegramAuthService = new TelegramAuthService();
-
 
 app.get('/generate-qr', async (req, res) => {
   try {
@@ -764,14 +486,13 @@ app.get('/check-session', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error("Error checking session:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to check session',
       message: error.message
     });
   }
 });
 
-// Add a debug endpoint to view active sessions
 app.get('/debug/sessions', (req, res) => {
   const sessions = Array.from(sessionStore.keys());
   res.json({
@@ -780,7 +501,6 @@ app.get('/debug/sessions', (req, res) => {
   });
 });
 
-// Send OTP endpoint
 app.post('/send-otp', async (req, res) => {
   try {
     const { phoneNumber } = req.body;
@@ -798,7 +518,6 @@ app.post('/send-otp', async (req, res) => {
   }
 });
 
-// Validate OTP endpoint
 app.post('/validate-otp', async (req, res) => {
   try {
     const { phoneNumber, otp, phoneCodeHash } = req.body;
@@ -817,15 +536,54 @@ app.post('/validate-otp', async (req, res) => {
   }
 });
 
+app.post('/verify-qr-login', async (req, res) => {
+  try {
+    const { sessionToken } = req.body;
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+    if (!sessionToken) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Session token is required'
+      });
+    }
+
+    // Get session data from database
+    const sessionData = await getSession(sessionToken);
+    if (!sessionData) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Session not found'
+      });
+    }
+
+    res.json({
+      status: 'success',
+      user: {
+        telegram_id: sessionData.telegram_id,
+        first_name: sessionData.first_name,
+        last_name: sessionData.last_name,
+        phone_number: sessionData.phone_number
+      },
+      sessionToken: sessionToken
+    });
+
+  } catch (error) {
+    console.error("Error verifying QR login:", error);
+    res.status(500).json({
+      status: 'error',
+      message: error.message || 'Failed to verify QR login'
+    });
+  }
 });
 
-
-
-
-
-
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, async () => {
+  try {
+    await initializeDatabase();
+    console.log(`Server running on port ${PORT}`);
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
+    process.exit(1);
+  }
+});
 
